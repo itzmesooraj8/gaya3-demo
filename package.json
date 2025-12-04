@@ -25,6 +25,7 @@
     "react-router-dom": "^7.9.6",
     "recharts": "^3.5.0",
     "three": "^0.181.2",
+    "@supabase/supabase-js": "^2.65.5",
     "vite": "^7.2.4",
     "vitest": "^4.0.14",
     "zod": "^3.24.2"
@@ -32,7 +33,7 @@
   "devDependencies": {
     "@types/node": "^22.19.1",
     "@vitejs/plugin-react": "^5.0.0",
-    "supabase": "^2.65.5",
+    
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

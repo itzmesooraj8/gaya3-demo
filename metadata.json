@@ -1,0 +1,8 @@
+{
+  "name": "Gaya3",
+  "description": "Next-gen experiential booking platform featuring liquid architecture and AI concierge.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ]
+}

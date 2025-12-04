@@ -12,19 +12,26 @@ const VITE_SUPABASE_ANON_KEY = typeof import.meta !== 'undefined' && import.meta
 const SUPABASE_URL = VITE_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = VITE_SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
-let isSupabaseStub = false;
+// In development we allow a lightweight stub so local dev works without secrets.
+// In production (import.meta.env.PROD) we require the keys and will surface a clear error
+// so deployment fails fast if misconfigured.
+const isDev = typeof import.meta !== 'undefined' ? Boolean(import.meta.env?.DEV) : Boolean(process.env.NODE_ENV !== 'production');
+
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn('Supabase URL or ANON key missing. The app will run in read-only demo mode. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (or SUPABASE_URL/SUPABASE_ANON_KEY) in Vercel to enable full functionality.');
+  if (isDev) {
+    console.warn('Supabase env missing — using dev stub. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for full functionality.');
+  } else {
+    // Fail fast in production to avoid silently running a broken app.
+    throw new Error('Missing Supabase environment variables in production. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (or SUPABASE_URL/SUPABASE_ANON_KEY).');
+  }
 }
 
-// Export a real client only when credentials are present. Otherwise export a lightweight stub
-// so the app doesn't throw during startup in production when env vars are not configured.
 let supabaseClient;
+let _supabaseIsStub = false;
 if (SUPABASE_URL && SUPABASE_ANON_KEY) {
   supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 } else {
-  isSupabaseStub = true;
-  // Minimal stub implementing the parts of the API the app expects.
+  _supabaseIsStub = true;
   const noopAsync = async () => ({ data: null, error: null });
   const noopSubscription = { unsubscribe: () => {} };
   supabaseClient = {
@@ -40,4 +47,4 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY) {
 }
 
 export const supabase = supabaseClient;
-export const supabaseIsStub = isSupabaseStub;
+export const supabaseIsStub = _supabaseIsStub;

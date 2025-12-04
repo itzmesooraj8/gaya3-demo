@@ -11,7 +11,10 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "react",
+      "react-dom",
+      "vite/client"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
@@ -26,4 +29,13 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   }
+  ,
+  "exclude": [
+    "supabase/functions",
+    "supabase/migrations",
+    "workers",
+    "functions",
+    "dist",
+    "node_modules"
+  ]
 }

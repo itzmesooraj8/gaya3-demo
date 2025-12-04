@@ -12,6 +12,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Canonical host used for OAuth redirect. Prefer Vite env var, fallback to production domain.
+const CANONICAL_HOST = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CANONICAL_HOST)
+  ? String(import.meta.env.VITE_CANONICAL_HOST)
+  : 'https://gaya3-henna.vercel.app';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
 

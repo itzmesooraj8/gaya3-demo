@@ -19,6 +19,7 @@ import Privacy from './src/pages/Privacy';
 import Terms from './src/pages/Terms';
 import NotFound from './src/pages/NotFound';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { supabaseIsStub } from './src/services/supabaseClient';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -36,6 +37,11 @@ const App: React.FC = () => {
       <AuthProvider>
         <Router>
           <div className="relative min-h-screen text-white overflow-hidden selection:bg-white/30">
+            {/* Banner shown when Supabase envs are not configured and stub is active */}
+            {supabaseIsStub && (
+              <div className="supabase-stub-banner">Supabase not configured — running in demo read-only mode</div>
+            )}
+
             <FluidBackground />
             
             <Navbar />

@@ -1,14 +1,15 @@
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import FluidBackground from './src/components/canvas/FluidBackground';
+const FluidBackground = React.lazy(() => import('./src/components/canvas/FluidBackground'));
 import Navbar from './src/components/Navbar';
 import Footer from './src/components/Footer';
 import GayaChat from './src/components/GayaChat';
 import Home from './src/pages/Home';
 import PropertyDetails from './src/pages/PropertyDetails';
 import Auth from './src/pages/Auth';
+import AuthCallback from './src/pages/AuthCallback';
 import Admin from './src/pages/Admin';
 import HostDashboard from './src/pages/HostDashboard';
 import UserDashboard from './src/pages/UserDashboard';
@@ -42,7 +43,9 @@ const App: React.FC = () => {
               <div className="supabase-stub-banner">Supabase not configured — running in demo read-only mode</div>
             )}
 
-            <FluidBackground />
+            <Suspense fallback={null}>
+              <FluidBackground />
+            </Suspense>
             
             <Navbar />
             
@@ -52,6 +55,7 @@ const App: React.FC = () => {
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/booking-success" element={<BookingSuccess />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/host" element={<HostDashboard />} />
               <Route path="/dashboard" element={<UserDashboard />} />

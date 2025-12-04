@@ -93,7 +93,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithGoogle = async () => {
     // Opens Supabase OAuth flow (redirect)
-    await supabase.auth.signInWithOAuth({ provider: 'google' });
+    // Force the OAuth redirect to use the canonical production origin so providers
+    // (Google) and Supabase see the same redirect URI. This prevents codes being
+    // issued for preview domains which later fail during exchange.
+    const redirectTo = `${CANONICAL_HOST}/auth/callback`;
+    await supabase.auth.signInWithOAuth({ provider: 'google' }, { redirectTo });
   };
 
   const logout = () => {

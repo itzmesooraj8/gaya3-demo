@@ -113,6 +113,21 @@ supabase functions deploy create-payment-intent --project-ref <your-project-ref>
 
 Before deploying, set the function environment variables listed above in the dashboard (Functions → Settings). Both functions expect `SUPABASE_URL` and a service role key to call the REST API securely.
 
+## Auth redirect URIs
+
+When using Supabase authentication and external OAuth providers (Google), you must register the exact production redirect URI in both Supabase and the provider console. Add the following URI to:
+
+- Supabase Console → Authentication → Settings → `Redirect URLs` and `Allowed Origins (CORS)`
+- Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client → `Authorized redirect URIs`
+
+Use this exact value for production:
+
+```
+https://gaya3-henna.vercel.app/auth/callback
+```
+
+If you prefer using the root redirect, register `https://gaya3-henna.vercel.app/` as well, but the explicit `/auth/callback` path is recommended for clarity and security.
+
 ## 6) Testing checklist
 - Sign up and create a `profiles` row with `id = auth.uid()`.
 - As a host, create a property. Verify anonymous user can `SELECT` properties.

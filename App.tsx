@@ -2,23 +2,23 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import FluidBackground from './components/canvas/FluidBackground';
-import Navbar from './components/Navbar';
-import Footer from './components/Footer';
-import GayaChat from './components/GayaChat';
-import Home from './pages/Home';
-import PropertyDetails from './pages/PropertyDetails';
-import Auth from './pages/Auth';
-import Admin from './pages/Admin';
-import HostDashboard from './pages/HostDashboard';
-import UserDashboard from './pages/UserDashboard';
-import BookingDetails from './pages/BookingDetails';
-import Checkout from './pages/Checkout';
-import BookingSuccess from './pages/BookingSuccess';
-import Privacy from './pages/Privacy';
-import Terms from './pages/Terms';
-import NotFound from './pages/NotFound';
-import { AuthProvider } from './contexts/AuthContext';
+import FluidBackground from './src/components/canvas/FluidBackground';
+import Navbar from './src/components/Navbar';
+import Footer from './src/components/Footer';
+import GayaChat from './src/components/GayaChat';
+import Home from './src/pages/Home';
+import PropertyDetails from './src/pages/PropertyDetails';
+import Auth from './src/pages/Auth';
+import Admin from './src/pages/Admin';
+import HostDashboard from './src/pages/HostDashboard';
+import UserDashboard from './src/pages/UserDashboard';
+import BookingDetails from './src/pages/BookingDetails';
+import Checkout from './src/pages/Checkout';
+import BookingSuccess from './src/pages/BookingSuccess';
+import Privacy from './src/pages/Privacy';
+import Terms from './src/pages/Terms';
+import NotFound from './src/pages/NotFound';
+import { AuthProvider } from './src/contexts/AuthContext';
 
 // Create a client
 const queryClient = new QueryClient({

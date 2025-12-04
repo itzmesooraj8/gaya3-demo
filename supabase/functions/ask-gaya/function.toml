@@ -1,0 +1,10 @@
+[build]
+  command = "deno task bundle index.ts index.bundle.js"
+
+[dev]
+  port = 54323
+
+[function]
+  name = "ask-gaya"
+  runtime = "deno"
+  entrypoint = "index.ts"

@@ -3,11 +3,17 @@ name: Sync Deploy (Vercel + Supabase)
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   sync-deploy:
     name: Deploy to Vercel and apply Supabase migrations
     runs-on: ubuntu-latest
+    concurrency:
+      group: sync-deploy-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -16,7 +22,15 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '18.x'
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Install dependencies
         run: npm ci
@@ -29,6 +43,8 @@ jobs:
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           working-directory: ./
           vercel-args: '--prod'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
       - name: Run Supabase migrations (if any)
         env:
@@ -36,13 +52,13 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
-          # Install the Supabase CLI via npm (fallback method)
-          npm install -g supabase || true
+          # Try installing Supabase CLI (npm global or fallback to @supabase/cli)
+          npm install -g supabase@latest || npm install -g @supabase/cli@latest || true
 
           if command -v supabase >/dev/null 2>&1; then
             echo "Running Supabase migrations (if present)."
-            # Attempt to push any local migrations to the remote project.
-            # Note: adjust this command/path if you store migrations elsewhere.
+            # Push local migrations (if any) to the remote project. This uses the project ref from secrets.
+            # If your migrations are stored elsewhere, adjust the command/path accordingly.
             supabase db push --project-ref "${{ secrets.SUPABASE_PROJECT_ID }}" || echo "No migrations applied or supabase CLI returned non-zero exit code."
           else
             echo "Supabase CLI not available — skipping migrations."

@@ -29,7 +29,7 @@ const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, signInWithGoogle } = useAuth();
 
   const handleDemoLogin = (role: 'user' | 'admin') => {
     login(role);
@@ -40,59 +40,14 @@ const Auth: React.FC = () => {
     }
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     setIsLoading(true);
-    
-    // Check if Google script is loaded
-    if (typeof window.google === 'undefined') {
-      console.error("Google Identity Services script not loaded");
-      alert("Unable to connect to Google. Please check your internet connection.");
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-        callback: async (tokenResponse: any) => {
-          if (tokenResponse && tokenResponse.access_token) {
-            try {
-              // Fetch user details using the access token
-              const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-              });
-              
-              if (!userInfoResponse.ok) {
-                 throw new Error("Failed to fetch user info");
-              }
-
-              const userInfo = await userInfoResponse.json();
-              
-              // Login with REAL Google Data
-              login('user', {
-                id: userInfo.sub,
-                name: userInfo.name,
-                email: userInfo.email,
-                avatar: userInfo.picture,
-                memberStatus: 'Silver' // New users start as Silver
-              });
-              
-              navigate('/dashboard');
-            } catch (error) {
-              console.error("Error fetching user info:", error);
-              alert("Authentication failed. Please try again.");
-            }
-          }
-          setIsLoading(false);
-        },
-      });
-
-      // Trigger the popup
-      client.requestAccessToken();
-
-    } catch (error) {
-      console.error("Error initializing Google Login:", error);
+      await signInWithGoogle();
+      // The auth state listener in AuthContext will handle profile creation and redirect
+    } catch (err) {
+      console.error('Google sign-in failed', err);
+      alert('Google sign-in failed.');
       setIsLoading(false);
     }
   };

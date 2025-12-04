@@ -1,0 +1,10 @@
+[build]
+  command = "deno task bundle index.ts index.bundle.js"
+
+[dev]
+  port = 54324
+
+[function]
+  name = "create-payment-intent"
+  runtime = "deno"
+  entrypoint = "index.ts"

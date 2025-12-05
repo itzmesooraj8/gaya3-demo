@@ -1,0 +1,75 @@
+name: Supabase/Postgres Migrations
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.POSTGRES_HOST }}" ]; then echo "POSTGRES_HOST secret is missing"; exit 1; fi
+          if [ -z "${{ secrets.POSTGRES_USER }}" ]; then echo "POSTGRES_USER secret is missing"; exit 1; fi
+          if [ -z "${{ secrets.POSTGRES_PASSWORD }}" ]; then echo "POSTGRES_PASSWORD secret is missing"; exit 1; fi
+          if [ -z "${{ secrets.POSTGRES_DATABASE }}" ]; then echo "POSTGRES_DATABASE secret is missing"; exit 1; fi
+
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run migrations
+        working-directory: ${{ github.workspace }}
+        run: |
+          echo "Running migrations against ${{ secrets.POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT || '5432' }} (db: ${{ secrets.POSTGRES_DATABASE }})"
+          # Apply every SQL file in the migrations folder in lexical order
+          for f in supabase/migrations/*.sql; do
+            echo "Applying migration: $f"
+            psql -h "${{ secrets.POSTGRES_HOST }}" -p "${{ secrets.POSTGRES_PORT || '5432' }}" -U "${{ secrets.POSTGRES_USER }}" -d "${{ secrets.POSTGRES_DATABASE }}" -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Completed
+        run: echo "Migrations finished successfully"
+name: Supabase migrations
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  run-migrations:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_DATABASE: ${{ secrets.POSTGRES_DATABASE }}
+      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT || '5432' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Show connection info (masked)
+        run: |
+          echo "Host: $POSTGRES_HOST"
+          echo "Database: $POSTGRES_DATABASE"
+
+      - name: Run SQL migrations
+        env:
+          PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        run: |
+          if [ -f "supabase/migrations/001_create_schema.sql" ]; then
+            psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DATABASE" -p "$POSTGRES_PORT" -f supabase/migrations/001_create_schema.sql
+          else
+            echo "No migration file found at supabase/migrations/001_create_schema.sql";
+            exit 1;
+          fi

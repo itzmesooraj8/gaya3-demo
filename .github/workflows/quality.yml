@@ -1,0 +1,44 @@
+name: Quality Checks (Lighthouse + Audit)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    env:
+      SITE_URL: ${{ secrets.SITE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (optional)
+        run: npm run build --if-present
+
+      - name: Run npm audit (fail on >= moderate)
+        run: |
+          npm audit --audit-level=moderate
+
+      - name: Run Lighthouse CI
+        if: env.SITE_URL != ''
+        run: |
+          npx @lhci/cli autorun --upload.target=temporary-public-storage --url="$SITE_URL"
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Upload LHCI artifacts (logs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lhci-results
+          path: ./lighthouse-report || .

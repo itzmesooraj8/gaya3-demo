@@ -25,3 +25,9 @@ dist-ssr
 
 .vercel
 .env*.local
+
+# Ignore local envs and build artifacts
+.env*
+dist/
+vercel_app.js
+vercel_root.html

@@ -6,7 +6,7 @@ import { ChatMode, GroundingMetadata } from "../types";
 const hasKey = !!process.env.API_KEY;
 if (!hasKey) {
   console.error("❌ GEMINI FATAL: API Key is missing.");
-  console.error("Action Required: Create a .env file in project root with 'GEMINI_API_KEY=AIzaSy...'");
+  console.error("Action Required: Create a local .env file with 'GEMINI_API_KEY=your-api-key' and set it in your environment or Vercel.");
 } else {
   console.log("✅ GEMINI SERVICE: Neural Link Established.");
 }

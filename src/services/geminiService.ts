@@ -1,6 +1,9 @@
 import { supabase } from './supabaseClient';
 import { ChatMode, GroundingMetadata } from "../types";
 
+import { supabase } from './supabaseClient';
+import { ChatMode, GroundingMetadata } from "../types";
+
 interface GeminiChunk {
   text: string;
   groundingMetadata?: GroundingMetadata;
@@ -29,7 +32,7 @@ export const streamGeminiResponse = async function* (
       return h;
     });
 
-    // 2. Call the Secure Edge Function
+    // 2. Call the Secure Edge Function (No API Key needed here)
     const { data, error } = await supabase.functions.invoke('ask-gaya', {
       body: {
         messages: [...formattedHistory, { role: 'user', text: userMessage }],

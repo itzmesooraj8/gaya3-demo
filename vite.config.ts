@@ -9,9 +9,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
-    // Do NOT inject server-side secrets into the client bundle.
-    // Only `VITE_` prefixed variables should be exposed to the frontend.
-    define: {},
+    // 🔒 SECURITY FIX: Removed "define" block that injected process.env.API_KEY
+    define: {
+      // This block has been removed for security reasons
+    },
     build: {
       chunkSizeWarningLimit: 1200,
       rollupOptions: {

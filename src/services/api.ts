@@ -3,92 +3,100 @@ import { Property, Booking } from '../types';
 
 export const api = {
   properties: {
-    // Fetch all properties from the DB
     getAll: async (): Promise<Property[]> => {
-      const { data, error } = await supabase
-        .from('properties')
-        .select('*');
-
-      if (error) {
-        console.error('Error fetching properties:', error);
+      try {
+        const { data, error } = await supabase.from('properties').select('*');
+        if (error) {
+          console.error('Error fetching properties:', error);
+          return [];
+        }
+        return data as Property[];
+      } catch (err) {
+        console.error('properties.getAll error', err);
         return [];
       }
-      return data as Property[];
     },
 
-    // Fetch a single property by ID
     getById: async (id: string): Promise<Property | undefined> => {
-      const { data, error } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (error) return undefined;
-      return data as Property;
+      try {
+        const { data, error } = await supabase.from('properties').select('*').eq('id', id).single();
+        if (error) {
+          console.error('properties.getById error', error);
+          return undefined;
+        }
+        return data as Property;
+      } catch (err) {
+        console.error('properties.getById error', err);
+        return undefined;
+      }
     },
 
-    // Filter properties by 'vibe' (server-side filtering)
     getRecommended: async (vibe?: string): Promise<Property[]> => {
-      let query = supabase.from('properties').select('*');
-      
-      if (vibe) {
-        query = query.eq('vibe', vibe);
+      try {
+        let query: any = supabase.from('properties').select('*');
+        if (vibe) query = query.eq('vibe', vibe);
+        const { data, error } = await query;
+        if (error) {
+          console.error('properties.getRecommended error', error);
+          return [];
+        }
+        return data as Property[] || [];
+      } catch (err) {
+        console.error('properties.getRecommended error', err);
+        return [];
       }
-      
-      const { data, error } = await query;
-      if (error) return [];
-      return data as Property[];
     }
   },
 
   bookings: {
-    // Fetch bookings for the logged-in user
     getMyBookings: async (): Promise<Booking[]> => {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*, properties(*)') // Join with properties to get details
-        .order('start_date', { ascending: true });
-
-      if (error) throw error;
-      return data as any;
+      try {
+        const { data, error } = await supabase.from('bookings').select('*, properties(*)').order('start_date', { ascending: true });
+        if (error) {
+          console.error('bookings.getMyBookings error', error);
+          return [];
+        }
+        return data as any;
+      } catch (err) {
+        console.error('bookings.getMyBookings error', err);
+        return [];
+      }
     },
 
-    // Create a new booking (Used for UPI/Manual flow)
     create: async (bookingData: Partial<Booking>): Promise<{ success: boolean; id: string }> => {
-      // 1. Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Must be logged in to book.");
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Must be logged in.');
 
-      // 2. Insert booking row
-      const { data, error } = await supabase
-        .from('bookings')
-        .insert({
-          property_id: bookingData.propertyId,
+        const { data, error } = await supabase.from('bookings').insert({
+          property_id: (bookingData as any).propertyId,
           user_id: user.id,
-          start_date: bookingData.date,
-          // Default to 1 day later if end_date is missing
-          end_date: bookingData.endDate || bookingData.date, 
-          guests: bookingData.guests,
-          total_price: bookingData.totalPrice,
-          status: 'UPCOMING' // Default status for manual/UPI bookings
-        })
-        .select()
-        .single();
+          start_date: (bookingData as any).date,
+          end_date: (bookingData as any).endDate || (bookingData as any).date,
+          guests: (bookingData as any).guests,
+          total_price: (bookingData as any).totalPrice,
+          status: 'UPCOMING'
+        }).select().single();
 
-      if (error) throw error;
-      return { success: true, id: data.id };
+        if (error) throw error;
+        return { success: true, id: (data as any).id };
+      } catch (err) {
+        console.error('bookings.create error', err);
+        throw err;
+      }
     }
   },
 
   user: {
     updateProfile: async (id: string, updates: any) => {
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({ id, ...updates });
-      
-      if (error) throw error;
-      return { success: true };
+      try {
+        const { error } = await supabase.from('profiles').upsert({ id, ...updates });
+        if (error) throw error;
+        return { success: true };
+      } catch (err) {
+        console.error('user.updateProfile error', err);
+        throw err;
+      }
     }
   }
 };

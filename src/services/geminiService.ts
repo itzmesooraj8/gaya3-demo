@@ -1,49 +1,55 @@
-import { supabase, supabaseIsStub } from './supabaseClient';
-import { ChatMode } from '../types';
+import { supabase } from './supabaseClient';
+import { ChatMode, GroundingMetadata } from "../types";
 
 interface GeminiChunk {
   text: string;
+  groundingMetadata?: GroundingMetadata;
 }
 
 /**
- * Streams AI responses by invoking the secure `ask-gaya` Edge Function.
- * Keeps the async-generator signature so callers remain unchanged.
+ * Streams the response from the secure 'ask-gaya' Edge Function.
+ * This hides the API Key from the browser.
  */
 export const streamGeminiResponse = async function* (
   userMessage: string,
-  history: any[] = [],
+  history: string[] = [],
   mode: ChatMode = 'standard'
 ): AsyncGenerator<GeminiChunk> {
-  if (supabaseIsStub) {
-    yield { text: '⚠️ Stub Mode: Supabase not configured. AI features are unavailable.' };
-    return;
-  }
-
-  const formattedHistory = history.map((h: any) => {
-    if (typeof h === 'string') {
-      const [role, ...rest] = h.split(': ');
-      return { role: role?.toLowerCase() || 'user', text: rest.join(': ') || '' };
-    }
-    return h;
-  });
-
   try {
+    // 1. Format history for the backend (generic "role: content" format)
+    const formattedHistory = (history || []).map((h: any) => {
+      if (typeof h === 'string') {
+        const [role, ...rest] = h.split(':');
+        return {
+          role: role?.trim().toLowerCase() === 'model' ? 'model' : 'user',
+          text: rest.join(':').trim(),
+        };
+      }
+      // pass through objects
+      return h;
+    });
+
+    // 2. Call the Secure Edge Function
     const { data, error } = await supabase.functions.invoke('ask-gaya', {
       body: {
         messages: [...formattedHistory, { role: 'user', text: userMessage }],
-        mode,
+        mode: mode,
       },
     });
 
     if (error) {
-      console.error('AI Error:', error);
-      yield { text: 'I am having trouble connecting to the neural link.' };
-      return;
+      console.error('❌ Edge Function Error:', error);
+      throw new Error('Neural link unstable.');
     }
 
-    yield { text: data?.text || 'The stars are quiet.' };
-  } catch (err: any) {
-    console.error('AI invoke error', err);
-    yield { text: 'I am having trouble connecting to the neural link.' };
+    // 3. Yield the result
+    if (data?.text) {
+      yield { text: data.text };
+    } else {
+      yield { text: 'The oracle is silent.' };
+    }
+  } catch (error: any) {
+    console.error('❌ GEMINI PROXY ERROR:', error);
+    yield { text: 'I am having trouble connecting to the neural link. Please try again.' };
   }
 };

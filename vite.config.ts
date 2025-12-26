@@ -9,10 +9,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
-    define: {
-      // We map the variable user provided (GEMINI_API_KEY) to the one the app expects (API_KEY)
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || env.GEMINI_API_KEY),
-    },
+    // Do NOT inject server-side secrets into the client bundle.
+    // Only `VITE_` prefixed variables should be exposed to the frontend.
+    define: {},
     build: {
       chunkSizeWarningLimit: 1200,
       rollupOptions: {

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { 
   MapPin, Calendar, Users, ShieldCheck, Lock, CreditCard, 
   Smartphone, CheckCircle, Zap, AlertCircle, ChevronRight, Shield
@@ -15,9 +16,6 @@ import { api } from '../services/api';
 
 // --- ZOD SCHEMAS ---
 const cardSchema = z.object({
-  cardNumber: z.string().regex(/^\d{4} \d{4} \d{4} \d{4}$/, "Must be 16 digits (0000 0000 0000 0000)"),
-  expiry: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, "Invalid date (MM/YY)"),
-  cvc: z.string().regex(/^\d{3}$/, "Must be 3 digits"),
   name: z.string().min(2, "Full name is required")
 });
 
@@ -53,10 +51,14 @@ const Checkout: React.FC = () => {
   const intervalRef = useRef<any>(null);
 
   // Forms
-  const { register: regCard, formState: { errors: cardErrors, isValid: isCardValid } } = useForm<CardFormValues>({
+  const { register: regCard, formState: { errors: cardErrors, isValid: isCardValid }, getValues } = useForm<CardFormValues>({
     resolver: zodResolver(cardSchema),
     mode: 'onChange'
   });
+
+  const stripe = useStripe();
+  const elements = useElements();
+  const [cardError, setCardError] = useState<string | null>(null);
 
   const { register: regUpi, formState: { errors: upiErrors, isValid: isUpiValid }, trigger: triggerUpi } = useForm<UpiFormValues>({
     resolver: zodResolver(upiSchema),
@@ -104,7 +106,13 @@ const Checkout: React.FC = () => {
     if (progress >= 100) return;
     
     // Validation Blocks
-    if (paymentMethod === 'card' && !isCardValid) return;
+    if (paymentMethod === 'card') {
+      // Ensure name is valid and Stripe is loaded
+      if (!isCardValid) return;
+      if (!stripe || !elements) return;
+      const cardEl = elements.getElement(CardElement);
+      if (!cardEl) return;
+    }
     if (paymentMethod === 'upi' && upiMode === 'vpa' && !vpaVerified) return;
 
     intervalRef.current = setInterval(() => {
@@ -130,12 +138,35 @@ const Checkout: React.FC = () => {
     try {
       // Simulate sporadic failure for demonstration if needed, 
       // but relying on api catch block primarily.
+      // If paying by card, create a Stripe PaymentMethod securely
+      let paymentMethodId: string | null = null;
+      if (paymentMethod === 'card') {
+        if (!stripe || !elements) throw new Error('Stripe not initialized');
+        const cardEl = elements.getElement(CardElement);
+        if (!cardEl) throw new Error('Card element not mounted');
+
+        const name = getValues('name') || user?.name || 'Guest';
+        const pm = await stripe.createPaymentMethod({
+          type: 'card',
+          card: cardEl,
+          billing_details: { name }
+        });
+        if (pm.error) {
+          setErrorMessage(pm.error.message || 'Payment method creation failed');
+          setShowError(true);
+          setProgress(0);
+          return;
+        }
+        paymentMethodId = pm.paymentMethod?.id || null;
+      }
+
       const result = await api.bookings.create({
         propertyId: property.id,
         date: date,
         guests: guests,
         totalPrice: finalAmount,
-        status: 'UPCOMING'
+        status: 'UPCOMING',
+        paymentMethodId
       });
 
       if (result.success) {
@@ -396,51 +427,33 @@ Status: Verified
                          </p>
                        )}
                     </div>
+
                     <div className="space-y-2">
-                       <label className="text-[10px] uppercase tracking-widest text-white/40">Card Number</label>
-                       <div className="relative">
-                          <input 
-                             type="text" placeholder="0000 0000 0000 0000" 
-                             {...regCard('cardNumber')}
-                             className={`w-full bg-white/5 border rounded-xl p-4 font-mono text-white outline-none transition-colors ${cardErrors.cardNumber ? 'border-red-500/50' : 'border-white/10 focus:border-white/40'}`}
-                          />
-                          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex gap-2 opacity-50">
-                             <div className="w-8 h-5 bg-white/20 rounded-sm" />
-                          </div>
-                       </div>
-                       {cardErrors.cardNumber && (
-                         <p className="text-red-400 text-[10px] mt-1 flex items-center gap-1">
-                           <AlertCircle size={10} /> {cardErrors.cardNumber.message}
-                         </p>
-                       )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                       <div className="space-y-2">
-                          <label className="text-[10px] uppercase tracking-widest text-white/40">Expiry (MM/YY)</label>
-                          <input 
-                            {...regCard('expiry')}
-                            placeholder="MM/YY" 
-                            className={`w-full bg-white/5 border rounded-xl p-4 font-mono text-white outline-none transition-colors ${cardErrors.expiry ? 'border-red-500/50' : 'border-white/10 focus:border-white/40'}`}
-                          />
-                          {cardErrors.expiry && (
-                            <p className="text-red-400 text-[10px] mt-1 flex items-center gap-1">
-                              <AlertCircle size={10} /> {cardErrors.expiry.message}
-                            </p>
-                          )}
-                       </div>
-                       <div className="space-y-2">
-                          <label className="text-[10px] uppercase tracking-widest text-white/40">CVC</label>
-                          <input 
-                            {...regCard('cvc')}
-                            placeholder="123" 
-                            className={`w-full bg-white/5 border rounded-xl p-4 font-mono text-white outline-none transition-colors ${cardErrors.cvc ? 'border-red-500/50' : 'border-white/10 focus:border-white/40'}`}
-                          />
-                          {cardErrors.cvc && (
-                            <p className="text-red-400 text-[10px] mt-1 flex items-center gap-1">
-                              <AlertCircle size={10} /> {cardErrors.cvc.message}
-                            </p>
-                          )}
-                       </div>
+                      <label className="text-[10px] uppercase tracking-widest text-white/40">Card Details</label>
+                      <div className="w-full bg-white/5 border rounded-xl p-4 font-mono text-white outline-none transition-colors">
+                        <CardElement
+                          options={{
+                            hidePostalCode: true,
+                            style: {
+                              base: {
+                                color: '#FFFFFF',
+                                fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial',
+                                fontSize: '16px',
+                                '::placeholder': { color: '#9CA3AF' },
+                                letterSpacing: '0.2px'
+                              },
+                              invalid: { color: '#ff6b6b' }
+                            }
+                          }}
+                          onReady={() => setCardError(null)}
+                          onChange={(e: any) => setCardError(e.error?.message || null)}
+                        />
+                      </div>
+                      {cardError && (
+                        <p className="text-red-400 text-[10px] mt-1 flex items-center gap-1">
+                          <AlertCircle size={10} /> {cardError}
+                        </p>
+                      )}
                     </div>
                  </motion.div>
                ) : (

@@ -1,18 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
+import { supabase, supabaseIsStub } from './supabaseClient';
 import { ChatMode, GroundingMetadata } from "../types";
-
-// --- DEBUGGING ---
-// This checks if vite.config.ts successfully passed the key from .env
-const hasKey = !!process.env.API_KEY;
-if (!hasKey) {
-  console.error("❌ GEMINI FATAL: API Key is missing.");
-  console.error("Action Required: Create a local .env file with 'GEMINI_API_KEY=your-api-key' and set it in your environment or Vercel.");
-} else {
-  console.log("✅ GEMINI SERVICE: Neural Link Established.");
-}
-
-// Initialize the client with the key injected via Vite
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 interface GeminiChunk {
   text: string;
@@ -73,9 +60,9 @@ export const streamGeminiResponse = async function* (
   history: string[], 
   mode: ChatMode = 'standard'
 ): AsyncGenerator<GeminiChunk> {
-  
-  if (!process.env.API_KEY) {
-    yield { text: "⚠️ Neural Link Severed: API Key missing. Please check your .env file." };
+  // If Supabase not configured, return a safe fallback so UI doesn't crash
+  if (supabaseIsStub) {
+    yield { text: "⚠️ Stub Mode: Supabase not configured. AI features are unavailable in this environment." };
     return;
   }
 
@@ -121,25 +108,81 @@ export const streamGeminiResponse = async function* (
   }
 
   try {
-    // console.log(`📡 Sending request to Gemini [Mode: ${mode}, Model: ${model}]`);
-    
-    const responseStream = await ai.models.generateContentStream({
-      model: model,
-      contents: `
-        Previous Context:
-        ${history.slice(-5).join('\n')}
-        
-        Current Request:
-        ${userMessage}
-      `,
-      config: config
+    // Attempt to call the Supabase Edge Function. Prefer streaming via fetch if available.
+    const payload = { message: userMessage, history, mode, model, config };
+
+    // Try supabase client's functions.invoke first (may return JSON)
+    try {
+      const invokeResp: any = await supabase.functions.invoke('ask-gaya', { body: payload });
+      // Some supabase clients return { data, error }
+      if (invokeResp?.error) {
+        throw invokeResp.error;
+      }
+
+      // If the response contains a stream-like body, we can't access it via client helper
+      // so fall through to the fetch-based invocation below as a fallback.
+      if (invokeResp?.data && typeof invokeResp.data === 'string') {
+        // plain string response
+        yield { text: invokeResp.data };
+        return;
+      }
+    } catch (invokeErr) {
+      // Not fatal — we'll try a direct fetch to the functions endpoint to support streaming.
+      // console.warn('supabase.functions.invoke failed, falling back to direct fetch', invokeErr);
+    }
+
+    // Fallback: POST directly to Supabase Functions endpoint so we can read a streaming body if available
+    const SUPABASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL)
+      ? String(import.meta.env.VITE_SUPABASE_URL)
+      : (process.env.SUPABASE_URL || '');
+    const SUPABASE_ANON_KEY = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY)
+      ? String(import.meta.env.VITE_SUPABASE_ANON_KEY)
+      : (process.env.SUPABASE_ANON_KEY || '');
+
+    if (!SUPABASE_URL) {
+      yield { text: "⚠️ Supabase URL not configured. Cannot call Edge Function." };
+      return;
+    }
+
+    const functionUrl = SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/ask-gaya';
+    const fetchResp = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+      },
+      body: JSON.stringify(payload),
     });
 
-    for await (const chunk of responseStream) {
-      yield {
-        text: chunk.text || "",
-        groundingMetadata: chunk.candidates?.[0]?.groundingMetadata as GroundingMetadata
-      };
+    // If the function returns a streaming body, stream chunks to the caller
+    if (fetchResp.body && typeof fetchResp.body.getReader === 'function') {
+      const reader = fetchResp.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = '';
+
+      while (!done) {
+        const { value, done: d } = await reader.read();
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          // Yield incremental updates (best-effort). Consumers should handle partial text.
+          yield { text: buffer };
+        }
+        done = d;
+      }
+      return;
+    }
+
+    // Otherwise parse JSON/body and yield single result
+    const json = await fetchResp.json().catch(async () => {
+      const txt = await fetchResp.text();
+      return { text: txt };
+    });
+
+    if (json) {
+      const text = json.text || (json?.candidates?.[0]?.content) || JSON.stringify(json);
+      yield { text };
+      return;
     }
   } catch (error: any) {
     console.error("❌ GEMINI API ERROR:", error);

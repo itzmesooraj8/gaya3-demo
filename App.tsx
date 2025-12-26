@@ -1,6 +1,8 @@
 
 import React, { Suspense } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 const FluidBackground = React.lazy(() => import('./src/components/canvas/FluidBackground'));
 import Navbar from './src/components/Navbar';
@@ -32,11 +34,14 @@ const queryClient = new QueryClient({
   },
 });
 
+const stripePromise = typeof import.meta !== 'undefined' ? loadStripe(String(import.meta.env?.VITE_STRIPE_PUBLISHABLE_KEY)) : loadStripe(process.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+
 const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router>
+        <Elements stripe={stripePromise}>
+          <Router>
           <div className="relative min-h-screen text-white overflow-hidden selection:bg-white/30">
             {/* Banner shown when Supabase envs are not configured and stub is active */}
             {supabaseIsStub && (
@@ -69,7 +74,8 @@ const App: React.FC = () => {
 
             <GayaChat />
           </div>
-        </Router>
+          </Router>
+        </Elements>
       </AuthProvider>
     </QueryClientProvider>
   );

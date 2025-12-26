@@ -1,4 +1,0 @@
-[function]
-name = "get-upload-url"
-runtime = "deno"
-entrypoint = "index.ts"

@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.203.0/http/mod.ts";
 
 // Edge Function to proxy AI requests to Google GenAI securely on the server-side.
 // Expects JSON body: { message, history, mode }

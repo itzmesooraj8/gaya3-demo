@@ -160,21 +160,88 @@ const Checkout: React.FC = () => {
         paymentMethodId = pm.paymentMethod?.id || null;
       }
 
-      const result = await api.bookings.create({
+      // If using UPI, preserve existing mock flow
+      if (paymentMethod === 'upi') {
+        const result = await api.bookings.create({
+          propertyId: property.id,
+          date: date,
+          guests: guests,
+          totalPrice: finalAmount,
+          status: 'UPCOMING'
+        });
+        if (result.success) {
+          setConfirmedBookingId(result.id);
+          setShowConfirmation(true);
+          return;
+        }
+        throw new Error('UPI booking failed');
+      }
+
+      // Card flow: call Supabase Edge Function to create & confirm PaymentIntent
+      const SUPABASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL)
+        ? String(import.meta.env.VITE_SUPABASE_URL)
+        : (process.env.SUPABASE_URL || '');
+      const SUPABASE_ANON_KEY = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY)
+        ? String(import.meta.env.VITE_SUPABASE_ANON_KEY)
+        : (process.env.SUPABASE_ANON_KEY || '');
+
+      if (!SUPABASE_URL) throw new Error('Supabase not configured');
+
+      const functionUrl = SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/create-booking';
+
+      const bookingDetails = {
         propertyId: property.id,
-        date: date,
-        guests: guests,
-        totalPrice: finalAmount,
-        status: 'UPCOMING',
-        paymentMethodId
+        userId: user?.id,
+        date,
+        guests,
+        totalPrice: finalAmount
+      };
+
+      const resp = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {})
+        },
+        body: JSON.stringify({ paymentMethodId, bookingDetails })
       });
 
-      if (result.success) {
-        setConfirmedBookingId(result.id);
+      const json = await resp.json().catch(async () => ({ error: 'Invalid response from payment function' }));
+
+      if (json.error) throw new Error(json.error || 'Payment function error');
+
+      if (json.requiresAction && json.clientSecret) {
+        // Handle 3D Secure on the client
+        const confirmation = await stripe!.confirmCardPayment(json.clientSecret);
+        if (confirmation.error) {
+          throw new Error(confirmation.error.message || '3D Secure authorization failed');
+        }
+
+        // After successful SCA, finalize booking server-side
+        const finalizeResp = await fetch(functionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {})
+          },
+          body: JSON.stringify({ paymentIntentId: confirmation.paymentIntent?.id, finalize: true, bookingDetails })
+        });
+
+        const finalizeJson = await finalizeResp.json().catch(() => ({ error: 'Finalize failed' }));
+        if (finalizeJson.error) throw new Error(finalizeJson.error || 'Finalize booking failed');
+
+        setConfirmedBookingId(finalizeJson.bookingId || null);
         setShowConfirmation(true);
-      } else {
-        throw new Error("Payment authorization failed.");
+        return;
       }
+
+      if (json.success) {
+        setConfirmedBookingId(json.bookingId || null);
+        setShowConfirmation(true);
+        return;
+      }
+
+      throw new Error('Payment authorization failed.');
     } catch (e) {
       console.error("Booking failed", e);
       setErrorMessage("The neural link encountered a disturbance. Payment gateway rejected the transaction. Please verify your credentials.");

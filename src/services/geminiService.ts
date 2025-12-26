@@ -60,13 +60,35 @@ export const streamGeminiResponse = async function* (
   history: string[], 
   mode: ChatMode = 'standard'
 ): AsyncGenerator<GeminiChunk> {
-  // If Supabase not configured, return a safe fallback so UI doesn't crash
-  if (supabaseIsStub) {
-    yield { text: "⚠️ Stub Mode: Supabase not configured. AI features are unavailable in this environment." };
-    return;
+  // Format history for the backend
+  const formattedHistory = history.map((h: any) => {
+    if (typeof h === 'string') {
+      const [role, ...rest] = h.split(': ');
+      return { role: role?.toLowerCase() || 'user', text: rest.join(': ') || '' };
+    }
+    return h;
+  });
+  
+  try {
+    const { data, error } = await supabase.functions.invoke('ask-gaya', {
+      body: {
+        messages: [...formattedHistory, { role: 'user', text: userMessage }],
+        mode,
+      }
+    });
+    
+    if (error) {
+      console.error('AI Error:', error);
+      yield { text: 'I am having trouble connecting to the neural link.' };
+      return;
+    }
+    
+    yield { text: data?.text || 'The stars are quiet.' };
+  } catch (err: any) {
+    console.error('AI invoke error', err);
+    yield { text: 'I am having trouble connecting to the neural link.' };
   }
-
-  let model = 'gemini-3-pro-preview';
+};
   let config: any = {
     systemInstruction: SYSTEM_INSTRUCTIONS[mode],
   };

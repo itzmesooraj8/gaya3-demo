@@ -1,52 +1,93 @@
-import { Booking, Property } from '../types';
-import { MOCK_BOOKINGS, MOCK_PROPERTIES } from '../constants';
+import { supabase } from './supabaseClient';
+import { Property, Booking } from '../types';
 
-// Simulator for network latency (Liquid feel: fast but with slight weight)
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// --- API CLIENT ---
-// This prepares the app for Module 2: Backend Architecture.
-// Currently it simulates the backend, but later we replace implementation 
-// to use fetch('/api/...')
 export const api = {
-  
   properties: {
+    // Fetch all properties from the DB
     getAll: async (): Promise<Property[]> => {
-      await delay(800);
-      return MOCK_PROPERTIES;
+      const { data, error } = await supabase
+        .from('properties')
+        .select('*');
+
+      if (error) {
+        console.error('Error fetching properties:', error);
+        return [];
+      }
+      return data as Property[];
     },
+
+    // Fetch a single property by ID
     getById: async (id: string): Promise<Property | undefined> => {
-      await delay(600);
-      return MOCK_PROPERTIES.find(p => p.id === id);
+      const { data, error } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) return undefined;
+      return data as Property;
     },
+
+    // Filter properties by 'vibe' (server-side filtering)
     getRecommended: async (vibe?: string): Promise<Property[]> => {
-      await delay(1000); // AI simulation delay
-      if (!vibe) return MOCK_PROPERTIES;
-      return MOCK_PROPERTIES.filter(p => p.vibe === vibe);
+      let query = supabase.from('properties').select('*');
+      
+      if (vibe) {
+        query = query.eq('vibe', vibe);
+      }
+      
+      const { data, error } = await query;
+      if (error) return [];
+      return data as Property[];
     }
   },
 
   bookings: {
-    getMyBookings: async (userId: string): Promise<Booking[]> => {
-      await delay(1200); // Simulate database query
-      // For MVP, we return all mock bookings. 
-      // In real backend, filter by userId
-      return MOCK_BOOKINGS;
+    // Fetch bookings for the logged-in user
+    getMyBookings: async (): Promise<Booking[]> => {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*, properties(*)') // Join with properties to get details
+        .order('start_date', { ascending: true });
+
+      if (error) throw error;
+      return data as any;
     },
+
+    // Create a new booking (Used for UPI/Manual flow)
     create: async (bookingData: Partial<Booking>): Promise<{ success: boolean; id: string }> => {
-      await delay(2000); // Simulate payment processing & allocation
-      const newId = `B-${Math.floor(Math.random() * 10000)}`;
-      
-      // In a real app, we would push to the array or DB here
-      // MOCK_BOOKINGS.push({ ...bookingData, id: newId } as Booking);
-      
-      return { success: true, id: newId };
+      // 1. Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Must be logged in to book.");
+
+      // 2. Insert booking row
+      const { data, error } = await supabase
+        .from('bookings')
+        .insert({
+          property_id: bookingData.propertyId,
+          user_id: user.id,
+          start_date: bookingData.date,
+          // Default to 1 day later if end_date is missing
+          end_date: bookingData.endDate || bookingData.date, 
+          guests: bookingData.guests,
+          total_price: bookingData.totalPrice,
+          status: 'UPCOMING' // Default status for manual/UPI bookings
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, id: data.id };
     }
   },
 
   user: {
-    updateProfile: async (userId: string, data: any) => {
-      await delay(1500);
+    updateProfile: async (id: string, updates: any) => {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ id, ...updates });
+      
+      if (error) throw error;
       return { success: true };
     }
   }
